@@ -17,6 +17,7 @@
 
 namespace Okta\Generated\Users;
 
+use Okta\Generated\GroupRules\GroupRuleGroupAssignment;
 use Okta\Groups\Group;
 use Okta\UserFactors\Factor;
 use Okta\UserFactors\SecurityQuestion;
@@ -60,7 +61,7 @@ class User extends \Okta\Resource\AbstractResource
                         "/users"
                     );
     }
-        
+
     public function save()
     {
         return \Okta\Client::getInstance()
@@ -81,7 +82,7 @@ class User extends \Okta\Resource\AbstractResource
                     $this
                 );
     }
-        
+
     /**
      * Get the id.
      *
@@ -149,7 +150,23 @@ class User extends \Okta\Resource\AbstractResource
             self::PROFILE,
             $profile
         );
-        
+
+        return $this;
+    }
+
+    /**
+     * Set the Group Ids.
+     *
+     * @param array $groupIds The GroupIds instance.
+     * @return self
+     */
+    public function setGroupIds(array $groupIds)
+    {
+        $this->setProperty(
+            GroupRuleGroupAssignment::GROUP_IDS,
+            $groupIds
+        );
+
         return $this;
     }
 
@@ -210,7 +227,7 @@ class User extends \Okta\Resource\AbstractResource
             self::CREDENTIALS,
             $credentials
         );
-        
+
         return $this;
     }
 
@@ -436,7 +453,7 @@ class User extends \Okta\Resource\AbstractResource
 
 
     /**
-    * 
+    *
     *
     *
     * @return mixed|null
@@ -456,7 +473,7 @@ class User extends \Okta\Resource\AbstractResource
 
 
     /**
-    * 
+    *
     *
     *
     * @return mixed|null
@@ -672,6 +689,23 @@ class User extends \Okta\Resource\AbstractResource
                 ->executeRequest('PUT', $uri);
 
         return $body;
+    }
+
+
+    /**
+     * Delete [user](users.html#user-model) from group with &#x60;OKTA_GROUP&#x60; type.
+     *
+     *
+     * @return mixed|null
+     */
+    public function deleteFromGroup($groupId)
+    {
+        $uri = "/api/v1/groups/{$groupId}/users/{$this->getId()}";
+        $uri = $this->getDataStore()->buildUri(
+            $this->getDataStore()->getOrganizationUrl() . $uri
+        );
+
+        return $this->getDataStore()->executeRequest('DELETE', $uri);
     }
 
 

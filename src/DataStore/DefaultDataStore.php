@@ -203,7 +203,7 @@ class DefaultDataStore
         $this->resource = $resource;
         $uri = $this->uriFactory->createUri($this->organizationUrl . '/api/v1' . $href . '/' . $resource->getId());
 
-        $result = $this->executeRequest('POST', $uri, json_encode($this->toStdClass($resource)));
+        $result = $this->executeRequest($resource->getId() ? 'PUT' : 'POST', $uri, json_encode($this->toStdClass($resource)));
         $resource = new $returnType(null, $result);
 
         return $resource;
