@@ -17,9 +17,7 @@
 
 namespace Okta\DataStore;
 
-use Cache\Adapter\Common\CacheItem;
-use function GuzzleHttp\Psr7\build_query;
-use function GuzzleHttp\Psr7\parse_query;
+use GuzzleHttp\Psr7\Query;
 use Http\Client\Common\Plugin\AuthenticationPlugin;
 use Http\Client\Common\PluginClient;
 use Http\Client\HttpClient;
@@ -34,9 +32,12 @@ use Okta\Exceptions\ResourceException;
 use Okta\Resource\AbstractCollection;
 use Okta\Resource\AbstractResource;
 use Okta\Utilities\AuthorizationMode;
-use Okta\Utilities\SswsAuth;
 use Okta\Utilities\UserAgentBuilder;
+use Psr\Cache\InvalidArgumentException;
+use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Message\UriInterface;
+use ReflectionException;
+use stdClass;
 
 class DefaultDataStore
 {
@@ -72,11 +73,6 @@ class DefaultDataStore
     private $baseUrl;
 
     /**
-     * @var \Okta\Cache\CacheManager The CacheManager Instance from the Client.
-     */
-    private $cacheManager;
-
-    /**
      * @var AbstractResource A place to temporally store the resource we are working with.
      */
     private $resource;
@@ -110,18 +106,18 @@ class DefaultDataStore
         $this->messageFactory = MessageFactoryDiscovery::find();
 
         $this->baseUrl = $this->organizationUrl . '/api/v1';
-
     }
 
     /**
      * Create a new instance of a class with the provided properties.
      *
-     * @param string         $class Class to instantiate.
-     * @param \stdClass|NULL $properties The properties you want to use to instantiate.
-     * @param array          $options Any options you want to set.
+     * @param string $class Class to instantiate.
+     * @param stdClass|NULL $properties The properties you want to use to instantiate.
+     * @param array $options Any options you want to set.
      * @return object
+     * @throws ReflectionException
      */
-    public function instantiate(string $class, \stdClass $properties = null, array $options = [])
+    public function instantiate(string $class, stdClass $properties = null, array $options = [])
     {
         $propertiesArr = array($properties, $options);
 
@@ -133,7 +129,6 @@ class DefaultDataStore
         return $newClass;
     }
 
-
     /**
      * Get a resource from the API.
      *
@@ -142,6 +137,9 @@ class DefaultDataStore
      * @param string $path The path to the resource.
      * @param array $options The options to use when making the request.
      * @return AbstractResource
+     * @throws ResourceException
+     * @throws InvalidArgumentException
+     * @throws ClientExceptionInterface
      */
     public function getResource($href, $className, $path, array $options = []): AbstractResource
     {
@@ -165,6 +163,9 @@ class DefaultDataStore
      * @param string $collection the collection type to return as.
      * @param array $options Options to add to the request.
      * @return AbstractCollection
+     * @throws ResourceException
+     * @throws InvalidArgumentException
+     * @throws ClientExceptionInterface
      */
     public function getCollection($href, $className, $collection, array $options = []): AbstractCollection
     {
@@ -197,6 +198,9 @@ class DefaultDataStore
      * @param string $returnType The Resource class you want to return.
      *
      * @return mixed
+     * @throws ResourceException
+     * @throws InvalidArgumentException
+     * @throws ClientExceptionInterface
      */
     public function saveResource($href, $resource, $returnType)
     {
@@ -218,6 +222,9 @@ class DefaultDataStore
      * @param array $query The query of the URL
      *
      * @return mixed
+     * @throws ResourceException
+     * @throws InvalidArgumentException
+     * @throws ClientExceptionInterface
      */
     public function createResource($href, $resource, $returnType, $query=[])
     {
@@ -239,6 +246,9 @@ class DefaultDataStore
      * @param AbstractResource $resource The resource to save.
      *
      * @return mixed
+     * @throws ResourceException
+     * @throws InvalidArgumentException
+     * @throws ClientExceptionInterface
      */
     public function deleteResource($href, $resource)
     {
@@ -255,11 +265,13 @@ class DefaultDataStore
      *
      * @param string $method The type of request.
      * @param UriInterface $uri The URI object of the request.
-     * @param string       $body The body of the request.
-     * @param array        $options The options for the request.
+     * @param string $body The body of the request.
+     * @param array $options The options for the request.
      *
      * @return mixed|null
      * @throws ResourceException
+     * @throws InvalidArgumentException
+     * @throws ClientExceptionInterface
      */
     public function executeRequest($method, UriInterface $uri, $body = '', array $options = [])
     {
@@ -295,7 +307,7 @@ class DefaultDataStore
 
         $result = $response->getBody() ? json_decode($response->getBody()) : null;
 
-        if (isset($result) && $result instanceof \stdClass) {
+        if (isset($result) && $result instanceof stdClass) {
             $result->httpStatus = $response->getStatusCode();
         }
 
@@ -331,14 +343,14 @@ class DefaultDataStore
      * Convert an AbstractResource object to a stdClass object.
      *
      * @param AbstractResource $resource The resource to convert.
-     * @return \stdClass
+     * @return stdClass
      */
     private function toStdClass(AbstractResource $resource)
     {
 
         $propertyNames = $resource->getPropertyNames(true);
 
-        $properties = new \stdClass();
+        $properties = new stdClass();
         foreach ($propertyNames as $name) {
             $property = $resource->getProperty($name);
 
@@ -382,23 +394,9 @@ class DefaultDataStore
      */
     private function appendQueryValues($currentQuery, $queryDictionary)
     {
-        $currentQueryParts = parse_query($currentQuery);
+        $currentQueryParts = Query::parse($currentQuery, true);
 
-        if ($currentQuery == '') {
-            $result = [];
-        }
-
-        foreach ($queryDictionary as $key => $value) {
-            $key = strtr($key, ['=' => '%3D', '&' => '%26']);
-            if ($value !== null) {
-                $result[$key] = strtr($value, ['=' => '%3D', '&' => '%26']);
-            } else {
-                $result[$key] = $key;
-            }
-        }
-
-        $result = array_replace_recursive($currentQueryParts, $result);
-        return build_query($result);
+        return Query::build(array_replace_recursive($currentQueryParts, $queryDictionary), PHP_QUERY_RFC3986);
     }
 
     /**
